@@ -2,6 +2,7 @@ import csv
 import datetime
 import os
 import sys
+import argparse
 import tkinter as tk
 from tkinter import font
 from ctypes import windll
@@ -16,9 +17,7 @@ BOTTOM_TEXT = "*Master Overview Dashboard developed for Tech Cornwall T-Level Pl
 
 # ------------------------------------------------------------------------------
 # ⏱️ TIME TRAVEL TESTING OVERRIDE:
-# Keep this matched with your room displays to sync testing!
-# ------------------------------------------------------------------------------
-START_TEST_TIME = datetime.datetime(2026, 7, 2, 11, 30, 0) # YYYY, MM, DD, HH, MM, SS
+START_TEST_TIME = datetime.datetime(2026, 7, 2, 11, 15, 0) # YYYY, MM, DD, HH, MM, SS
 # ------------------------------------------------------------------------------
 
 CONFERENCE_DATE = datetime.date.today()
@@ -65,7 +64,6 @@ def parse_date_flexible(date_str: str) -> datetime.date | None:
 
 
 def load_full_schedule(filename: str):
-    """Loads all items to find all available unique rooms/tracks dynamically."""
     schedule: list[dict] = []
     try:
         with open(filename, mode='r', newline='', encoding='utf-8') as file:
@@ -80,10 +78,18 @@ def load_full_schedule(filename: str):
                 time_str = (clean_row.get('Start Time') or '').strip()
                 if not time_str: continue
                 
+                # Split time ranges like "11:00am - 11:45am" down to just the start time
+                if "-" in time_str:
+                    time_str = time_str.split("-")[0].strip()
+
                 try:
-                    start_time_obj = datetime.datetime.strptime(time_str, '%H:%M').time()
+                    # Parse 12-hour format with AM/PM
+                    start_time_obj = datetime.datetime.strptime(time_str.lower(), '%I:%M%p').time()
                 except ValueError:
-                    continue
+                    try:
+                        start_time_obj = datetime.datetime.strptime(time_str, '%H:%M').time()
+                    except ValueError:
+                        continue
 
                 start_datetime = datetime.datetime.combine(date_obj, start_time_obj)
                 duration_str = (clean_row.get('Duration') or '').strip()
@@ -137,7 +143,7 @@ def compute_display_state_for_track(track_schedule: list[dict], now: datetime.da
 
 
 class MasterDashboardApp:
-    def __init__(self, root, schedule_file: str = SCHEDULE_FILE):
+    def __init__(self, root, schedule_file: str = SCHEDULE_FILE, width: int = 1920, height: int = 1080):
         self.root = root
         self.root.title("Master Schedule Dashboard")
         self.root.configure(bg=PALETTE_DASH_BG)
@@ -145,43 +151,34 @@ class MasterDashboardApp:
         self.schedule_file = schedule_file
         self.all_events = load_full_schedule(schedule_file)
         
-        # Pull out a uniquely sorted list of all tracks/studios in the CSV
         self.tracks = sorted(list(set(e['track'] for e in self.all_events)))
         
         self.initial_real_time = datetime.datetime.now()
         
-        # Scaling mechanics
-        self.screen_width = root.winfo_screenwidth()
-        self.screen_height = root.winfo_screenheight()
+        self.screen_width = width
+        self.screen_height = height
         scale = min(self.screen_width / 1920, self.screen_height / 1080)
-        self.scale = max(1, scale)
+        scale = max(1, scale)
+        self.scale = scale
 
         self.title_font = font.Font(family='KG Second Chances Solid', size=max(int(24 * scale), 14), weight='bold')
         self.room_font = font.Font(family='KG Second Chances Solid', size=max(int(20 * scale), 12), weight='bold')
         self.text_font = font.Font(family='KG Second Chances Solid', size=max(int(14 * scale), 10))
-        self.italic_font = font.Font(family='KG Second Chances Sketch', size=max(int(12 * scale), 9))
 
         # --- Top Header Bar ---
         self.header_frame = tk.Frame(root, bg=PALETTE_BASE_BG, height=int(80 * self.scale))
         self.header_frame.pack(fill="x", side="top")
 
-        self.header_title = tk.Label(
-            self.header_frame, text="LIVE EVENTS OVERVIEW", 
-            fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font
-        )
+        self.header_title = tk.Label(self.header_frame, text="LIVE EVENTS OVERVIEW", fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font)
         self.header_title.pack(side="left", padx=int(30 * self.scale), pady=int(15 * self.scale))
 
-        self.time_label = tk.Label(
-            self.header_frame, text="00:00", 
-            fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font
-        )
+        self.time_label = tk.Label(self.header_frame, text="00:00", fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font)
         self.time_label.pack(side="right", padx=int(30 * self.scale), pady=int(15 * self.scale))
 
         # --- Main Grid Layout Frame ---
         self.grid_container = tk.Frame(root, bg=PALETTE_DASH_BG)
         self.grid_container.pack(fill="both", expand=True, padx=int(20 * self.scale), pady=int(20 * self.scale))
 
-        # Build UI tracking frames for each detected room
         self.room_cards = {}
         self.setup_grid()
 
@@ -189,14 +186,12 @@ class MasterDashboardApp:
         self.update()
 
     def setup_grid(self):
-        """Dynamically grid columns and rows depending on how many rooms exist."""
         num_rooms = len(self.tracks)
         if num_rooms == 0:
             err_lbl = tk.Label(self.grid_container, text="No tracks or rooms found in schedule.csv", font=self.title_font, bg=PALETTE_DASH_BG)
             err_lbl.pack(expand=True)
             return
 
-        # Determine optimized columns based on room volume
         cols = 3 if num_rooms > 4 else 2
         for i in range(cols):
             self.grid_container.grid_columnconfigure(i, weight=1, uniform="equal")
@@ -207,11 +202,9 @@ class MasterDashboardApp:
             
             self.grid_container.grid_rowconfigure(r, weight=1, uniform="equal")
 
-            # Room Container Box
             card = tk.Frame(self.grid_container, bg=PALETTE_CARD_BG_IDLE, bd=2, relief="groove")
             card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
 
-            # Room Title Badge Accent Banner
             badge_color = ROOM_BADGE_COLORS.get(room_name.upper(), "#3e3e3f")
             title_banner = tk.Frame(card, bg=badge_color)
             title_banner.pack(fill="x", side="top")
@@ -219,7 +212,6 @@ class MasterDashboardApp:
             lbl_room = tk.Label(title_banner, text=room_name.upper(), fg=PALETTE_TEXT_LIGHT, bg=badge_color, font=self.room_font, anchor="w", padx=10)
             lbl_room.pack(fill="x", pady=4)
 
-            # Inside content components
             content_frame = tk.Frame(card, bg=PALETTE_CARD_BG_IDLE, padx=10, pady=10)
             content_frame.pack(fill="both", expand=True)
 
@@ -235,18 +227,12 @@ class MasterDashboardApp:
             lbl_next_details = tk.Label(content_frame, text="No scheduled events", font=self.text_font, fg=PALETTE_TEXT_DARK, bg=PALETTE_CARD_BG_IDLE, anchor="w", justify="left")
             lbl_next_details.pack(fill="x")
 
-            # Store widget pointer keys for dynamic updates
             self.room_cards[room_name] = {
-                "card": card,
-                "content_frame": content_frame,
-                "now_status": lbl_now_status,
-                "now_details": lbl_now_details,
-                "next_status": lbl_next_status,
-                "next_details": lbl_next_details
+                "card": card, "content_frame": content_frame, "now_status": lbl_now_status,
+                "now_details": lbl_now_details, "next_status": lbl_next_status, "next_details": lbl_next_details
             }
 
     def update(self):
-        # Calculate synchronized system clock or virtual artificial test clock
         real_now = datetime.datetime.now()
         if 'START_TEST_TIME' in globals():
             time_passed = real_now - self.initial_real_time
@@ -257,21 +243,17 @@ class MasterDashboardApp:
 
         self.time_label.config(text=now.strftime("%H:%M:%S"))
 
-        # Loop through each frame box and recalculate status targets
         for room_name in self.tracks:
-            # Filter schedules belonging purely to this specific asset cell
             track_schedule = [e for e in self.all_events if e['track'] == room_name]
             state = compute_display_state_for_track(track_schedule, now)
             
             widgets = self.room_cards[room_name]
             
-            # --- Reset Defaults ---
             bg_color = PALETTE_CARD_BG_IDLE
             now_text = "Open Room / Break"
             next_text = "None Scheduled"
             now_status_lbl = "NOW:"
 
-            # --- Evaluate state properties ---
             if state['mode'] == 'in_talk' and state['current']:
                 bg_color = PALETTE_CARD_BG_ACTIVE
                 c = state['current']
@@ -286,15 +268,12 @@ class MasterDashboardApp:
                 now_text = f" STARTING SOON\n{n['title']}{speaker_str}"
                 now_status_lbl = " WARNING:"
 
-            # Handle parsing Next slots safely
             if state['next_event'] and state['mode'] != 'pre_start':
                 n = state['next_event']
                 speaker_str = f" - {n['speaker']}" if n['speaker'] else ""
                 next_text = f"[{n['start'].strftime('%H:%M')}] {n['title']}{speaker_str}"
             elif state['mode'] == 'in_talk' or state['mode'] == 'pre_start':
-                # If currently running a talk, scan ahead to see what follows it
                 upcoming = [e for e in track_schedule if e['start'] > now]
-                # Filter out the item if it's currently flagged as next_event but we are pre_start
                 if state['mode'] == 'pre_start' and upcoming:
                     upcoming.pop(0)
                 if upcoming:
@@ -302,10 +281,8 @@ class MasterDashboardApp:
                     speaker_str = f" - {f['speaker']}" if f['speaker'] else ""
                     next_text = f"[{f['start'].strftime('%H:%M')}] {f['title']}{speaker_str}"
 
-            # --- Render Updated Content State onto UI Panels ---
             widgets["card"].configure(bg=bg_color)
             widgets["content_frame"].configure(bg=bg_color)
-            
             widgets["now_status"].configure(text=now_status_lbl, bg=bg_color)
             widgets["now_details"].configure(text=now_text, bg=bg_color)
             widgets["next_status"].configure(bg=bg_color)
@@ -314,17 +291,61 @@ class MasterDashboardApp:
         self.root.after(self.update_interval_ms, self.update)
 
 
+def position_on_monitor(window, monitor_index):
+    """Positions the application borderless full screen on a chosen monitor index using native Win32 API calls."""
+    window.update_idletasks()
+    
+    monitors = []
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            class RECT(ctypes.Structure):
+                _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                            ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+            def callback(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                rect = ctypes.cast(lprcMonitor, ctypes.POINTER(RECT)).contents
+                monitors.append({
+                    "x": int(rect.left), "y": int(rect.top),
+                    "width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top)
+                })
+                return True
+
+            MonitorEnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(RECT), ctypes.c_long)
+            cb_proc = MonitorEnumProc(callback)
+            ctypes.windll.user32.EnumDisplayMonitors(None, None, cb_proc, 0)
+        except Exception:
+            monitors = []
+
+    prim_w = window.winfo_screenwidth()
+    prim_h = window.winfo_screenheight()
+
+    if monitor_index < len(monitors):
+        m = monitors[monitor_index]
+        w, h, x, y = m["width"], m["height"], m["x"], m["y"]
+    else:
+        w, h, y = prim_w, prim_h, 0
+        x = 0 if monitor_index == 0 else prim_w
+
+    window.overrideredirect(True)
+    window.geometry(f"{w}x{h}+{x}+{y}")
+    return w, h
+
+
 if __name__ == "__main__":
     set_dpi_awareness()
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--monitor', type=int, default=0, help="Target Monitor Index (0=Laptop Screen, 1=External screen)")
+    args = parser.parse_args()
+
     root = tk.Tk()
     
-    # Launch in native clean Fullscreen mode automatically
-    root.attributes('-fullscreen', True)
-    
-    # Escape path if someone exits via control termination hooks
+    width, height = position_on_monitor(root, args.monitor)
+    root.focus_force()
     root.bind("<Escape>", lambda e: root.destroy())
     
-    app = MasterDashboardApp(root, schedule_file=SCHEDULE_FILE)
+    app = MasterDashboardApp(root, schedule_file=SCHEDULE_FILE, width=width, height=height)
     
     try:
         root.mainloop()

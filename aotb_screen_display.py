@@ -9,33 +9,26 @@ from ctypes import windll
 # ==============================================================================
 # CONFIGURATION & TESTING CONTROLS
 # ==============================================================================
-# Automatically find the exact folder where this script is saved
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEDULE_FILE = os.path.join(SCRIPT_DIR, 'schedule.csv')
 
 BOTTOM_TEXT = "*This Timetable Software was Developed by Dylan Hankers and Caiden Ashley for a Tech Cornwall T-Level Placement Project."
 
 # ------------------------------------------------------------------------------
-# ⏱️ TIME TRAVEL TESTING OVERRIDE:
-# Set your desired starting Date and Time below. The script will start exactly 
-# here and then flow forward naturally second-by-second like a real clock!
-# To go live with the real clock, simply put a '#' in front of START_TEST_TIME.
+# ⏱️ TIME TRAVEL TESTING OVERRIDE
 # ------------------------------------------------------------------------------
-#START_TEST_TIME = datetime.datetime(2026, 7, 2, 9, 9, 57) # YYYY, MM, DD, HH, MM, SS
+START_TEST_TIME = datetime.datetime(2026, 7, 2, 10, 8, 0) # YYYY, MM, DD, HH, MM, SS
 # ------------------------------------------------------------------------------
 
-# Fallback base date if a row is completely missing a date entry
 CONFERENCE_DATE = datetime.date.today()
 
-# --- Colour palette ---
 PALETTE_BASE_BG = "#f68b3b"
-PALETTE_BASE_BG2 = "#ffbc03"    # Yellow for breaks / general background
-PALETTE_TALK_BG = "#fdba3e"     # Orange for talks / countdown
-PALETTE_TEXT_DARK = "#5b3b00"   # Dark brown text on yellow
-PALETTE_TEXT_LIGHT = "#ffffff"  # White text on orange
-PALETTE_TEXT_BLACK = "#3e3e3f"  # Black text for better contrast
+PALETTE_BASE_BG2 = "#ffbc03"    
+PALETTE_TALK_BG = "#fdba3e"     
+PALETTE_TEXT_DARK = "#5b3b00"   
+PALETTE_TEXT_LIGHT = "#ffffff"  
+PALETTE_TEXT_BLACK = "#3e3e3f"  
 
-# Room / track badge colours
 ROOM_BADGE_STYLES: dict[str, dict[str, str]] = {
     "ENGINEERING": {"bg": "#c83432", "fg": "#ffffff"},
     "DESIGN & PRODUCT": {"bg": "#0066a8", "fg": "#ffffff"},
@@ -44,16 +37,15 @@ ROOM_BADGE_STYLES: dict[str, dict[str, str]] = {
     "WORKSHOPS": {"bg": "#5a3ca9", "fg": "#ffffff"},
 }
 
-# --- Constants for State Display ---
-SECONDS_BEFORE_INTERMISSION_WARNING = 5 * 60  # 5 minutes in seconds
+SECONDS_BEFORE_INTERMISSION_WARNING = 5 * 60  
 
 
 def set_dpi_awareness():
     """Ensure the app behaves consistently across Windows scaling levels."""
     if sys.platform.startswith("win"):
         try:
-            PROCESS_PER_MONITOR_DPI_AWARE = 2
-            windll.shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)
+            # Per-Monitor DPI Aware (Value 2 handles mixed monitor scalings correctly)
+            windll.shcore.SetProcessDpiAwareness(2)
         except Exception:
             try:
                 windll.user32.SetProcessDPIAware()
@@ -61,36 +53,95 @@ def set_dpi_awareness():
                 pass
 
 
+def infer_event_type_from_title(title: str, current_type: str) -> str:
+    """Infer the event kind when the CSV leaves the type blank.
+
+    Only exact shared labels should be treated as breaks/social events.
+    Titles that merely contain words like 'break' are still regular talks.
+    """
+    normalized_title = title.strip().lower()
+    if not current_type or current_type.strip() == "":
+        exact_break_titles = {
+            "break",
+            "lunch",
+            "breakfast",
+            "meal",
+            "intermission",
+            "beach party",
+            "dydh da - welcome to day 1",
+            "meur ras - thank you!",
+        }
+        exact_social_titles = {
+            "welcome",
+            "party",
+            "social",
+            "dydh da",
+            "meur ras",
+            "beach party",
+        }
+        if normalized_title in exact_break_titles:
+            return "break"
+        if normalized_title in exact_social_titles:
+            return "social"
+        return "Talk"
+    return current_type.strip() or "Talk"
+
+
+def is_global_event_row(title: str, event_type: str) -> bool:
+    """Allow only clearly shared events to appear on every screen."""
+    normalized_title = title.strip().lower()
+    normalized_type = event_type.strip().lower()
+
+    if normalized_type in {"break", "social"}:
+        return True
+
+    return normalized_title in {
+        "breakfast",
+        "lunch",
+        "dydh da - welcome to day 1",
+        "meur ras - thank you!",
+        "beach party",
+        "welcome",
+        "keynote",
+        "break",
+    }
+
+
 def parse_date_flexible(date_str: str) -> datetime.date | None:
-    """Attempt to parse date strings dynamically using both UK and standard formats."""
     clean_str = date_str.strip()
     if not clean_str:
         return None
-        
     try:
         return datetime.datetime.strptime(clean_str, '%Y-%m-%d').date()
     except ValueError:
         pass
-        
     try:
         return datetime.datetime.strptime(clean_str, '%d/%m/%Y').date()
     except ValueError:
         pass
-        
     return None
 
 
 def load_schedule(filename: str, track_name: str | None = None):
-    """Load schedule CSV and build a list of event dicts."""
     schedule: list[dict] = []
     try:
-        with open(filename, mode='r', newline='', encoding='utf-8') as file:
+        with open(filename, mode='r', newline='', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                clean_row = {k.strip(): v for k, v in row.items() if k}
-                
-                row_track = clean_row.get('Track')
-                if track_name and row_track and row_track.strip() != track_name:
+                clean_row = {}
+                for k, v in row.items():
+                    if k is None:
+                        continue
+                    key = k.strip().lstrip('\ufeff')
+                    clean_row[key] = (v.strip() if v else '')
+
+                title = (clean_row.get('Talk Title') or clean_row.get('Title') or clean_row.get('Speaker/Title') or '').strip()
+                raw_type = clean_row.get('Type', '')
+                event_type = infer_event_type_from_title(title, raw_type)
+                is_global_event = is_global_event_row(title, event_type)
+
+                row_track = clean_row.get('Track', '')
+                if not is_global_event and track_name and row_track and row_track.strip().upper() != track_name.strip().upper():
                     continue
 
                 date_str = clean_row.get('Date') or ''
@@ -102,18 +153,28 @@ def load_schedule(filename: str, track_name: str | None = None):
                 elif date_obj is None:
                     date_obj = CONFERENCE_DATE
 
-                time_str = (clean_row.get('Start Time') or '').strip()
+                time_str = clean_row.get('Start Time', '')
                 if not time_str:
                     continue
+                
+                if '-' in time_str:
+                    time_str = time_str.split('-')[0].strip()
+
                 try:
                     start_time_obj = datetime.datetime.strptime(time_str, '%H:%M').time()
                 except ValueError:
-                    print(f"WARNING: Skipping row due to invalid Start Time format ('{time_str}'). Expected 24-hour HH:MM.")
-                    continue
+                    try:
+                        start_time_obj = datetime.datetime.strptime(time_str, '%I:%M%p').time()
+                    except ValueError:
+                        try:
+                            start_time_obj = datetime.datetime.strptime(time_str, '%I:%M %p').time()
+                        except ValueError:
+                            print(f"WARNING: Skipping row due to invalid Start Time format ('{clean_row.get('Start Time')}').")
+                            continue
 
                 start_datetime = datetime.datetime.combine(date_obj, start_time_obj)
 
-                duration_str = (clean_row.get('Duration') or '').strip()
+                duration_str = clean_row.get('Duration', '')
                 if not duration_str:
                     continue
                 try:
@@ -122,10 +183,8 @@ def load_schedule(filename: str, track_name: str | None = None):
                     continue
                 end_datetime = start_datetime + datetime.timedelta(minutes=duration_minutes)
 
-                speaker = (clean_row.get('Speaker') or '').strip()
-                title = (clean_row.get('Talk Title') or clean_row.get('Title') or clean_row.get('Speaker/Title') or '').strip()
-                synopsis = (clean_row.get('Synopsis') or '').strip()
-                event_type = (clean_row.get('Type') or 'Talk').strip()
+                speaker = clean_row.get('Speaker', '')
+                synopsis = clean_row.get('Synopsis', '')
                 room_name = (clean_row.get('Room Name') or clean_row.get('Room') or '').strip()
 
                 event = {
@@ -152,7 +211,6 @@ def load_schedule(filename: str, track_name: str | None = None):
 
 
 def compute_display_state(schedule: list[dict], now: datetime.datetime):
-    """Compute what should be shown on screen at a given time."""
     current = None
     upcoming: list[dict] = []
 
@@ -167,31 +225,13 @@ def compute_display_state(schedule: list[dict], now: datetime.datetime):
     following_event = upcoming[1] if len(upcoming) > 1 else None
 
     if not current and not next_event:
-        return {
-            'mode': 'none',
-            'current': None,
-            'next_event': None,
-            'following_event': None,
-            'seconds_to_start': None,
-        }
+        return {'mode': 'none', 'current': None, 'next_event': None, 'following_event': None, 'seconds_to_start': None}
 
     if current:
-        return {
-            'mode': 'in_talk',
-            'current': current,
-            'next_event': next_event,
-            'following_event': following_event,
-            'seconds_to_start': None,
-        }
+        return {'mode': 'in_talk', 'current': current, 'next_event': next_event, 'following_event': following_event, 'seconds_to_start': None}
 
     if next_event is None:
-        return {
-            'mode': 'none',
-            'current': None,
-            'next_event': None,
-            'following_event': None,
-            'seconds_to_start': None,
-        }
+        return {'mode': 'none', 'current': None, 'next_event': None, 'following_event': None, 'seconds_to_start': None}
 
     delta = next_event['start'] - now
     seconds_to_start = int(delta.total_seconds())
@@ -230,14 +270,15 @@ class SpeakerDisplayApp:
 
         self.track_name = track_name
         self.schedule = load_schedule(schedule_file, track_name=track_name)
-
-        # Calculate time offset at initial boot for forward tracking simulation
         self.initial_real_time = datetime.datetime.now()
         
-        self.screen_width = root.winfo_screenwidth()
-        self.screen_height = root.winfo_screenheight()
+        # Grab target monitor dimensions accurately
+        self.screen_width = root.winfo_width()
+        self.screen_height = root.winfo_height()
+        
+        # Safe scale check
         scale = min(self.screen_width / 1920, self.screen_height / 1080)
-        scale = max(1, scale)
+        scale = max(1.0, scale)
         self.scale = scale
         
         self.large_size = max(int(54 * scale), 24)
@@ -315,11 +356,9 @@ class SpeakerDisplayApp:
     def _apply_theme(self, *, bg: str, card_bg: str, title_fg: str, body_fg: str, extra_fg: str | None = None):
         if extra_fg is None:
             extra_fg = PALETTE_TEXT_LIGHT
-
         self.root.configure(bg=bg)
         self.header_frame.configure(bg=bg)
         self.time_label.configure(bg=bg, fg=PALETTE_TEXT_LIGHT)
-
         self.card_frame.configure(bg=card_bg, highlightbackground=PALETTE_TEXT_LIGHT)
         self.status_label.configure(bg=card_bg, fg=body_fg)
         self.title_label.configure(bg=card_bg, fg=title_fg)
@@ -329,19 +368,12 @@ class SpeakerDisplayApp:
 
     def update(self):
         real_now = datetime.datetime.now()
-
-        # ----------------------------------------------------------------------
-        # DYNAMIC TIME TRAVEL LOGIC:
-        # If START_TEST_TIME exists, figure out how many seconds have ticked by 
-        # since the program loaded and add them to our fake start time.
-        # ----------------------------------------------------------------------
         if 'START_TEST_TIME' in globals():
             time_passed = real_now - self.initial_real_time
             now = START_TEST_TIME + time_passed
             now = now.replace(microsecond=0)
         else:
             now = real_now.replace(microsecond=0)
-        # ----------------------------------------------------------------------
 
         if not self.schedule:
             self.status_label.config(text='FAIL-SAFE: No schedule loaded')
@@ -438,6 +470,57 @@ class SpeakerDisplayApp:
         self.root.after(self.update_interval_ms, self.update)
 
 
+def force_monitor_placement(window, display_num):
+    """
+    Bypasses Tkinter's buggy fullscreen toggle by manually tracking geometry canvas mapping
+    via the Windows user32/gdi32 system API.
+    """
+    window.update_idletasks()
+    
+    # Default fallback to primary laptop coordinates
+    x, y, w, h = 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
+    
+    if sys.platform.startswith("win"):
+        try:
+            from ctypes import windll, c_int, WINFUNCTYPE, c_void_p, Structure, POINTER
+            
+            # Standard RECT definition for WinAPI interaction
+            class RECT(Structure):
+                _fields_ = [("left", c_int), ("top", c_int), ("right", c_int), ("bottom", c_int)]
+            
+            user32 = windll.user32
+            monitors_found = []
+            
+            def _cb(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                # Unpack the bounds rect array pointer [left, top, right, bottom]
+                rect = lprcMonitor.contents
+                monitors_found.append((rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top))
+                return 1
+            
+            # Explicitly define POINTER(RECT) so .contents works cleanly
+            MonitorEnumProc = WINFUNCTYPE(c_int, c_void_p, c_void_p, POINTER(RECT), c_void_p)
+            callback_proc = MonitorEnumProc(_cb)
+            
+            user32.EnumDisplayMonitors(None, None, callback_proc, 0)
+            
+            if len(monitors_found) >= 2 and display_num == 2:
+                # Target the second display's exact device coordinates
+                x, y, w, h = monitors_found[1]
+            elif len(monitors_found) >= 1:
+                x, y, w, h = monitors_found[0]
+        except Exception as e:
+            print(f"Hardware detection query error fallback applied: {e}")
+            if display_num == 2:
+                x = window.winfo_screenwidth()
+
+    # Step 1: Temporarily remove window borders/decorations completely
+    window.overrideredirect(True)
+    
+    # Step 2: Manually force place window context into position boundaries
+    window.geometry(f"{w}x{h}+{x}+{y}")
+    window.update_idletasks()
+
+
 if __name__ == "__main__":
     set_dpi_awareness()
 
@@ -445,47 +528,48 @@ if __name__ == "__main__":
 
     if cli_track_arg:
         chosen_track = cli_track_arg
+        chosen_display = 1
         root = tk.Tk()
-        root.attributes('-fullscreen', True)
+        force_monitor_placement(root, chosen_display)
     else:
         root = tk.Tk()
-        root.title("Select room/track")
+        root.title("Setup Configurator")
 
         tracks = [
-            "STUDIO A",
-            "STUDIO C",
-            "STUDIO K",
-            "STUDIO L",
-            "STUDIO E",
-            "STUDIO F",
-            "LAWN",
-            "GYLLY BEACH",
+            "STUDIO A", "STUDIO C", "STUDIO K", "STUDIO L",
+            "STUDIO E", "STUDIO F", "LAWN", "GYLLY BEACH",
         ]
 
-        selected = tk.StringVar(value=tracks[0])
+        selected_track = tk.StringVar(value=tracks[0])
+        selected_display = tk.StringVar(value="Display 1 (Laptop)")
 
-        label = tk.Label(root, text="Which room are you in?", padx=20, pady=10)
-        label.pack()
+        tk.Label(root, text="Which room are you in?", font=("Arial", 11, "bold"), padx=20, pady=5).pack()
+        track_option = tk.OptionMenu(root, selected_track, *tracks)
+        track_option.pack(padx=20, pady=5)
 
-        option = tk.OptionMenu(root, selected, *tracks)
-        option.pack(padx=20, pady=10)
+        tk.Label(root, text="Target Monitor output:", font=("Arial", 11, "bold"), padx=20, pady=5).pack()
+        display_option = tk.OptionMenu(root, selected_display, "Display 1 (Laptop)", "Display 2 (External Display)")
+        display_option.pack(padx=20, pady=5)
 
-        chosen_track_box = [tracks[0]]
+        config_box = {"track": tracks[0], "display": 1}
 
         def on_start():
-            chosen_track_box[0] = selected.get()
+            config_box["track"] = selected_track.get()
+            config_box["display"] = 2 if "Display 2" in selected_display.get() else 1
             root.destroy()
 
         start_button = tk.Button(root, text="Start display", command=on_start, padx=20, pady=5)
-        start_button.pack(pady=(0, 20))
+        start_button.pack(pady=20)
 
         root.mainloop()
 
+        # Instantiate production presentation window canvas
         root = tk.Tk()
-        chosen_track = chosen_track_box[0]
+        chosen_track = config_box["track"]
+        chosen_display = config_box["display"]
 
+    force_monitor_placement(root, chosen_display)
     app = SpeakerDisplayApp(root, schedule_file=SCHEDULE_FILE, track_name=chosen_track)
-    root.attributes('-fullscreen', True)
     
     try:
         root.mainloop()
