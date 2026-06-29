@@ -3,7 +3,7 @@ import datetime
 import os
 import sys
 import tkinter as tk
-from tkinter import font
+from tkinter import font, messagebox
 from ctypes import windll
 
 # ==============================================================================
@@ -12,7 +12,7 @@ from ctypes import windll
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEDULE_FILE = os.path.join(SCRIPT_DIR, 'schedule.csv')
 
-BOTTOM_TEXT = "*This Timetable Software was Developed by Dylan Hankers and Caiden Ashley for a Tech Cornwall T-Level Placement Project."
+BOTTOM_TEXT = "*This Timetable Software was Developed by Dylan Hankers for a Tech Cornwall T-Level Placement Project."
 
 # ------------------------------------------------------------------------------
 # ⏱️ TIME TRAVEL TESTING OVERRIDE
@@ -54,30 +54,15 @@ def set_dpi_awareness():
 
 
 def infer_event_type_from_title(title: str, current_type: str) -> str:
-    """Infer the event kind when the CSV leaves the type blank.
-
-    Only exact shared labels should be treated as breaks/social events.
-    Titles that merely contain words like 'break' are still regular talks.
-    """
+    """Infer the event kind when the CSV leaves the type blank."""
     normalized_title = title.strip().lower()
     if not current_type or current_type.strip() == "":
         exact_break_titles = {
-            "break",
-            "lunch",
-            "breakfast",
-            "meal",
-            "intermission",
-            "beach party",
-            "dydh da - welcome to day 1",
-            "meur ras - thank you!",
+            "break", "lunch", "breakfast", "meal", "intermission",
+            "beach party", "dydh da - welcome to day 1", "meur ras - thank you!",
         }
         exact_social_titles = {
-            "welcome",
-            "party",
-            "social",
-            "dydh da",
-            "meur ras",
-            "beach party",
+            "welcome", "party", "social", "dydh da", "meur ras", "beach party",
         }
         if normalized_title in exact_break_titles:
             return "break"
@@ -96,14 +81,8 @@ def is_global_event_row(title: str, event_type: str) -> bool:
         return True
 
     return normalized_title in {
-        "breakfast",
-        "lunch",
-        "dydh da - welcome to day 1",
-        "meur ras - thank you!",
-        "beach party",
-        "welcome",
-        "keynote",
-        "break",
+        "breakfast", "lunch", "dydh da - welcome to day 1",
+        "meur ras - thank you!", "beach party", "welcome", "keynote", "break",
     }
 
 
@@ -272,11 +251,9 @@ class SpeakerDisplayApp:
         self.schedule = load_schedule(schedule_file, track_name=track_name)
         self.initial_real_time = datetime.datetime.now()
         
-        # Grab target monitor dimensions accurately
         self.screen_width = root.winfo_width()
         self.screen_height = root.winfo_height()
         
-        # Safe scale check
         scale = min(self.screen_width / 1920, self.screen_height / 1080)
         scale = max(1.0, scale)
         self.scale = scale
@@ -309,6 +286,24 @@ class SpeakerDisplayApp:
         )
         self.header_label.pack(side="left", padx=self.pad_x)
 
+        self.close_button = tk.Button(
+            self.header_frame,
+            text="✖",
+            command=self.confirm_quit,
+            fg=PALETTE_TEXT_BLACK,
+            bg=PALETTE_BASE_BG2,
+            activebackground=PALETTE_BASE_BG,
+            activeforeground=PALETTE_TEXT_LIGHT,
+            font=self.small_font,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            padx=int(10 * self.scale),
+            pady=int(2 * self.scale),
+        )
+        self.close_button.pack(side="right", padx=(0, self.pad_x))
+
         self.time_label = tk.Label(
             self.header_frame,
             text="",
@@ -316,7 +311,7 @@ class SpeakerDisplayApp:
             bg=PALETTE_BASE_BG2,
             font=self.small_font,
         )
-        self.time_label.pack(side="right", padx=self.pad_x)
+        self.time_label.pack(side="right", padx=(0, self.pad_x))
 
         self.card_frame = tk.Frame(
             root,
@@ -355,16 +350,21 @@ class SpeakerDisplayApp:
 
     def _apply_theme(self, *, bg: str, card_bg: str, title_fg: str, body_fg: str, extra_fg: str | None = None):
         if extra_fg is None:
-            extra_fg = PALETTE_TEXT_LIGHT
+            extra_fg = PALETTE_TEXT_DARK
         self.root.configure(bg=bg)
         self.header_frame.configure(bg=bg)
-        self.time_label.configure(bg=bg, fg=PALETTE_TEXT_LIGHT)
-        self.card_frame.configure(bg=card_bg, highlightbackground=PALETTE_TEXT_LIGHT)
+        self.time_label.configure(bg=bg, fg=PALETTE_TEXT_BLACK)
+        self.card_frame.configure(bg=card_bg, highlightbackground=PALETTE_TEXT_LIGHT, highlightthickness=2)
         self.status_label.configure(bg=card_bg, fg=body_fg)
         self.title_label.configure(bg=card_bg, fg=title_fg)
         self.info_label.configure(bg=card_bg, fg=body_fg)
         self.extra_label.configure(bg=card_bg, fg=PALETTE_TEXT_BLACK)
         self.bottom_label.configure(bg=card_bg, fg=PALETTE_TEXT_BLACK)
+
+    def confirm_quit(self):
+        if messagebox.askyesno("Close Speaker Display", "Are you sure you want to close the program?"):
+            self.root.destroy()
+            sys.exit(0)
 
     def update(self):
         real_now = datetime.datetime.now()
@@ -419,12 +419,20 @@ class SpeakerDisplayApp:
             synopsis = current['synopsis'] or ''
             end_time_str = current['end'].strftime('%H:%M')
 
-            self._apply_theme(bg=PALETTE_BASE_BG2, card_bg=PALETTE_TALK_BG, title_fg=PALETTE_TEXT_LIGHT, body_fg=PALETTE_TEXT_LIGHT)
+            self._apply_theme(bg=PALETTE_BASE_BG2, card_bg=PALETTE_BASE_BG2, title_fg=PALETTE_TEXT_DARK, body_fg=PALETTE_TEXT_DARK)
             self.status_label.config(text='Now on stage')
             main_text = f"{speaker}\n{title}" if speaker else title
             self.title_label.config(text=main_text)
             self.info_label.config(text=f"Scheduled to end at {end_time_str}")
-            self.extra_label.config(text=synopsis)
+
+            if next_event:
+                n_speaker = next_event['speaker'] or ''
+                n_title = next_event['title'] or ''
+                n_start = next_event['start'].strftime('%H:%M')
+                next_text = f"Next: {n_speaker} – {n_title} ({n_start})" if n_speaker else f"Next: {n_title} ({n_start})"
+                self.extra_label.config(text=f"{synopsis}\n\n{next_text}" if synopsis else next_text)
+            else:
+                self.extra_label.config(text=synopsis)
             self.bottom_label.config(text=BOTTOM_TEXT)
 
         elif mode == 'pre_start' and next_event:
@@ -436,7 +444,7 @@ class SpeakerDisplayApp:
             secs = state['seconds_to_start'] or 0
             minutes_remaining = max((secs + 59) // 60, 0)
 
-            self._apply_theme(bg=PALETTE_BASE_BG2, card_bg=PALETTE_TALK_BG, title_fg=PALETTE_TEXT_LIGHT, body_fg=PALETTE_TEXT_LIGHT)
+            self._apply_theme(bg=PALETTE_BASE_BG2, card_bg=PALETTE_BASE_BG2, title_fg=PALETTE_TEXT_DARK, body_fg=PALETTE_TEXT_DARK)
 
             countdown_str = format_timedelta(datetime.timedelta(seconds=secs))
             self.status_label.config(text=f"Starting soon – {minutes_remaining} minute warning")
@@ -471,20 +479,13 @@ class SpeakerDisplayApp:
 
 
 def force_monitor_placement(window, display_num):
-    """
-    Bypasses Tkinter's buggy fullscreen toggle by manually tracking geometry canvas mapping
-    via the Windows user32/gdi32 system API.
-    """
+    """Bypasses Tkinter's buggy fullscreen toggle by manually tracking geometry canvas mapping."""
     window.update_idletasks()
-    
-    # Default fallback to primary laptop coordinates
     x, y, w, h = 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
     
     if sys.platform.startswith("win"):
         try:
             from ctypes import windll, c_int, WINFUNCTYPE, c_void_p, Structure, POINTER
-            
-            # Standard RECT definition for WinAPI interaction
             class RECT(Structure):
                 _fields_ = [("left", c_int), ("top", c_int), ("right", c_int), ("bottom", c_int)]
             
@@ -492,19 +493,15 @@ def force_monitor_placement(window, display_num):
             monitors_found = []
             
             def _cb(hMonitor, hdcMonitor, lprcMonitor, dwData):
-                # Unpack the bounds rect array pointer [left, top, right, bottom]
                 rect = lprcMonitor.contents
                 monitors_found.append((rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top))
                 return 1
             
-            # Explicitly define POINTER(RECT) so .contents works cleanly
             MonitorEnumProc = WINFUNCTYPE(c_int, c_void_p, c_void_p, POINTER(RECT), c_void_p)
             callback_proc = MonitorEnumProc(_cb)
-            
             user32.EnumDisplayMonitors(None, None, callback_proc, 0)
             
             if len(monitors_found) >= 2 and display_num == 2:
-                # Target the second display's exact device coordinates
                 x, y, w, h = monitors_found[1]
             elif len(monitors_found) >= 1:
                 x, y, w, h = monitors_found[0]
@@ -513,10 +510,7 @@ def force_monitor_placement(window, display_num):
             if display_num == 2:
                 x = window.winfo_screenwidth()
 
-    # Step 1: Temporarily remove window borders/decorations completely
     window.overrideredirect(True)
-    
-    # Step 2: Manually force place window context into position boundaries
     window.geometry(f"{w}x{h}+{x}+{y}")
     window.update_idletasks()
 
@@ -534,36 +528,104 @@ if __name__ == "__main__":
     else:
         root = tk.Tk()
         root.title("Setup Configurator")
+        root.geometry("450x520")
+        root.configure(bg="#ffffff")
+        root.resizable(False, False)
+
+        # Custom Title Design Panel Matching Layout Block
+        header_panel = tk.Label(
+            root, 
+            text="DISPLAY SELECTION", 
+            bg=PALETTE_BASE_BG, 
+            fg=PALETTE_TEXT_LIGHT, 
+            font=("Arial", 14, "bold"), 
+            pady=15
+        )
+        header_panel.pack(fill="x", side="top", pady=(0, 20))
 
         tracks = [
-            "STUDIO A", "STUDIO C", "STUDIO K", "STUDIO L",
-            "STUDIO E", "STUDIO F", "LAWN", "GYLLY BEACH",
+            "ENGINEERING", "DESIGN & PRODUCT", "TEAMS", "ORGANISATIONS", "WORKSHOPS",
+            "STUDIO A", "STUDIO C", "STUDIO K", "STUDIO L", "STUDIO E", "STUDIO F", "LAWN", "GYLLY BEACH"
         ]
 
         selected_track = tk.StringVar(value=tracks[0])
-        selected_display = tk.StringVar(value="Display 1 (Laptop)")
+        selected_display = tk.IntVar(value=1)
 
-        tk.Label(root, text="Which room are you in?", font=("Arial", 11, "bold"), padx=20, pady=5).pack()
-        track_option = tk.OptionMenu(root, selected_track, *tracks)
-        track_option.pack(padx=20, pady=5)
+        # Main wrapper container area
+        body_frame = tk.Frame(root, bg="#ffffff", padx=25)
+        body_frame.pack(fill="both", expand=True)
 
-        tk.Label(root, text="Target Monitor output:", font=("Arial", 11, "bold"), padx=20, pady=5).pack()
-        display_option = tk.OptionMenu(root, selected_display, "Display 1 (Laptop)", "Display 2 (External Display)")
-        display_option.pack(padx=20, pady=5)
+        # --- ROOM SELECTION BLOCK ---
+        tk.Label(
+            body_frame, text="Room", font=("Arial", 11, "bold"), 
+            fg=PALETTE_TEXT_BLACK, bg="#ffffff", anchor="w"
+        ).pack(fill="x", pady=(0, 5))
+
+        # A beautiful drop-down panel structure replacing default system look
+        dropdown_frame = tk.Frame(body_frame, bg="#f0f0f0", bd=1, relief="solid")
+        dropdown_frame.pack(fill="x", pady=(0, 25))
+
+        track_option = tk.OptionMenu(dropdown_frame, selected_track, *tracks)
+        track_option.config(
+            font=("Arial", 11), bg="#fdfdfd", fg=PALETTE_TEXT_BLACK, 
+            activebackground="#f5f5f5", activeforeground=PALETTE_TEXT_BLACK,
+            relief="flat", bd=0, highlightthickness=0, indicatoron=True,
+            anchor="w", direction="below"
+        )
+        track_option["menu"].config(font=("Arial", 11), bg="#ffffff", fg=PALETTE_TEXT_BLACK, bd=1)
+        track_option.pack(fill="x", padx=2, pady=2)
+
+        # --- SCREEN SELECTION BLOCK ---
+        tk.Label(
+            body_frame, text="Screen", font=("Arial", 11, "bold"), 
+            fg=PALETTE_TEXT_BLACK, bg="#ffffff", anchor="w"
+        ).pack(fill="x", pady=(0, 5))
+
+        # Custom interactive flat selector cards for output paths
+        def update_display_cards():
+            if selected_display.get() == 1:
+                card1.config(bg="#f68b3b", fg="#ffffff", highlightbackground="#f68b3b")
+                card2.config(bg="#f9f9f9", fg=PALETTE_TEXT_BLACK, highlightbackground="#dcdcdc")
+            else:
+                card1.config(bg="#f9f9f9", fg=PALETTE_TEXT_BLACK, highlightbackground="#dcdcdc")
+                card2.config(bg="#f68b3b", fg="#ffffff", highlightbackground="#f68b3b")
+
+        card1 = tk.Button(
+            body_frame, text="Screen 1 (Laptop / Primary Display)", font=("Arial", 10, "bold"),
+            bg="#f9f9f9", fg=PALETTE_TEXT_BLACK, bd=0, highlightthickness=2, highlightbackground="#dcdcdc",
+            activebackground="#f68b3b", activeforeground="#ffffff", relief="flat", cursor="hand2", pady=12,
+            command=lambda: [selected_display.set(1), update_display_cards()]
+        )
+        card1.pack(fill="x", pady=4)
+
+        card2 = tk.Button(
+            body_frame, text="Screen 2 (External Monitor)", font=("Arial", 10, "bold"),
+            bg="#f9f9f9", fg=PALETTE_TEXT_BLACK, bd=0, highlightthickness=2, highlightbackground="#dcdcdc",
+            activebackground="#f68b3b", activeforeground="#ffffff", relief="flat", cursor="hand2", pady=12,
+            command=lambda: [selected_display.set(2), update_display_cards()]
+        )
+        card2.pack(fill="x", pady=(4, 25))
+
+        update_display_cards() # Initialize selection highlight states
 
         config_box = {"track": tracks[0], "display": 1}
 
         def on_start():
             config_box["track"] = selected_track.get()
-            config_box["display"] = 2 if "Display 2" in selected_display.get() else 1
+            config_box["display"] = selected_display.get()
             root.destroy()
 
-        start_button = tk.Button(root, text="Start display", command=on_start, padx=20, pady=5)
-        start_button.pack(pady=20)
+        # Action execution button
+        start_button = tk.Button(
+            body_frame, text="Start Display", command=on_start,
+            font=("Arial", 11, "bold"), bg=PALETTE_TEXT_BLACK, fg="#ffffff",
+            activebackground="#2a2a2b", activeforeground="#ffffff",
+            bd=0, relief="flat", cursor="hand2", padx=30, pady=10
+        )
+        start_button.pack(pady=(10, 20))
 
         root.mainloop()
 
-        # Instantiate production presentation window canvas
         root = tk.Tk()
         chosen_track = config_box["track"]
         chosen_display = config_box["display"]
