@@ -4,7 +4,7 @@ import os
 import sys
 import argparse
 import tkinter as tk
-from tkinter import font
+from tkinter import font, messagebox
 from ctypes import windll
 
 # ==============================================================================
@@ -78,12 +78,10 @@ def load_full_schedule(filename: str):
                 time_str = (clean_row.get('Start Time') or '').strip()
                 if not time_str: continue
                 
-                # Split time ranges like "11:00am - 11:45am" down to just the start time
                 if "-" in time_str:
                     time_str = time_str.split("-")[0].strip()
 
                 try:
-                    # Parse 12-hour format with AM/PM
                     start_time_obj = datetime.datetime.strptime(time_str.lower(), '%I:%M%p').time()
                 except ValueError:
                     try:
@@ -142,6 +140,88 @@ def compute_display_state_for_track(track_schedule: list[dict], now: datetime.da
     return {'mode': mode, 'current': None, 'next_event': next_event}
 
 
+def get_monitors():
+    monitors = []
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            class RECT(ctypes.Structure):
+                _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                            ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+            def callback(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                rect = ctypes.cast(lprcMonitor, ctypes.POINTER(RECT)).contents
+                monitors.append({
+                    "x": int(rect.left), "y": int(rect.top),
+                    "width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top)
+                })
+                return True
+
+            MonitorEnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(RECT), ctypes.c_long)
+            cb_proc = MonitorEnumProc(callback)
+            ctypes.windll.user32.EnumDisplayMonitors(None, None, cb_proc, 0)
+        except Exception:
+            pass
+    return monitors
+
+
+class MonitorSelectionLauncher:
+    """A clean, modern popup dialog to choose which screen to deploy the app onto."""
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Dashboard Launcher")
+        self.root.configure(bg="#ffffff")
+        
+        # Fixed center-of-primary size for the launcher menu
+        self.root.geometry("450x300")
+        self.root.resizable(False, False)
+        
+        self.chosen_monitor = 0
+        self.confirmed = False
+
+        available_fonts = [f.lower() for f in font.families()]
+        ui_font = 'Inter' if 'inter' in available_fonts else 'Segoe UI' if 'segoe ui' in available_fonts else 'Arial'
+
+        title_f = font.Font(family=ui_font, size=16, weight='bold')
+        btn_f = font.Font(family=ui_font, size=11, weight='bold')
+        desc_f = font.Font(family=ui_font, size=10, weight='normal')
+
+        # Header Frame
+        hdr = tk.Frame(root, bg=PALETTE_BASE_BG, height=60)
+        hdr.pack(fill="x", side="top")
+        
+        lbl_title = tk.Label(hdr, text="DISPLAY SELECTION", font=title_f, fg="#ffffff", bg=PALETTE_BASE_BG)
+        lbl_title.pack(pady=15)
+
+        lbl_prompt = tk.Label(root, text="Select the target screen for the Master Dashboard:", font=desc_f, fg=PALETTE_TEXT_DARK, bg="#ffffff")
+        lbl_prompt.pack(pady=(20, 10))
+
+        # Dynamic button generations based on active links
+        monitors = get_monitors()
+        num_screens = max(1, len(monitors))
+
+        btn_frame = tk.Frame(root, bg="#ffffff")
+        btn_frame.pack(expand=True, fill="both", padx=40)
+
+        # Button 1: Primary Laptop Screen
+        btn1 = tk.Button(btn_frame, text="Screen 1 (Laptop / Primary Display)", font=btn_f, bg=PALETTE_CARD_BG_IDLE, fg=PALETTE_TEXT_DARK, 
+                         activebackground=PALETTE_BASE_BG, activeforeground="#ffffff", bd=1, relief="solid", height=2, cursor="hand2",
+                         command=lambda: self.select_and_close(0))
+        btn1.pack(fill="x", pady=5)
+
+        # Button 2: Secondary Monitor
+        btn2_text = "Screen 2 (External Monitor)" if num_screens > 1 else "Screen 2 (Force To External Area)"
+        btn2 = tk.Button(btn_frame, text=btn2_text, font=btn_f, bg=PALETTE_CARD_BG_IDLE, fg=PALETTE_TEXT_DARK, 
+                         activebackground=PALETTE_BASE_BG, activeforeground="#ffffff", bd=1, relief="solid", height=2, cursor="hand2",
+                         command=lambda: self.select_and_close(1))
+        btn2.pack(fill="x", pady=5)
+
+    def select_and_close(self, index):
+        self.chosen_monitor = index
+        self.confirmed = True
+        self.root.destroy()
+
+
 class MasterDashboardApp:
     def __init__(self, root, schedule_file: str = SCHEDULE_FILE, width: int = 1920, height: int = 1080):
         self.root = root
@@ -150,9 +230,7 @@ class MasterDashboardApp:
         
         self.schedule_file = schedule_file
         self.all_events = load_full_schedule(schedule_file)
-        
         self.tracks = sorted(list(set(e['track'] for e in self.all_events)))
-        
         self.initial_real_time = datetime.datetime.now()
         
         self.screen_width = width
@@ -161,9 +239,13 @@ class MasterDashboardApp:
         scale = max(1, scale)
         self.scale = scale
 
-        self.title_font = font.Font(family='KG Second Chances Solid', size=max(int(24 * scale), 14), weight='bold')
-        self.room_font = font.Font(family='KG Second Chances Solid', size=max(int(20 * scale), 12), weight='bold')
-        self.text_font = font.Font(family='KG Second Chances Solid', size=max(int(14 * scale), 10))
+        heading_font_family = self._pick_available_font(['Inter', 'Segoe UI', 'SF Pro Display', 'Arial'], fallback='sans-serif')
+        body_font_family = self._pick_available_font(['Inter', 'Segoe UI', 'SF Pro Text', 'Arial'], fallback='sans-serif')
+
+        self.title_font = font.Font(family=heading_font_family, size=max(int(26 * scale), 16), weight='bold')
+        self.room_font = font.Font(family=heading_font_family, size=max(int(20 * scale), 12), weight='bold')
+        self.text_font = font.Font(family=body_font_family, size=max(int(14 * scale), 10), weight='normal')
+        self.status_font = font.Font(family=heading_font_family, size=max(int(12 * scale), 9), weight='bold')
 
         # --- Top Header Bar ---
         self.header_frame = tk.Frame(root, bg=PALETTE_BASE_BG, height=int(80 * self.scale))
@@ -172,8 +254,26 @@ class MasterDashboardApp:
         self.header_title = tk.Label(self.header_frame, text="LIVE EVENTS OVERVIEW", fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font)
         self.header_title.pack(side="left", padx=int(30 * self.scale), pady=int(15 * self.scale))
 
+        self.close_button = tk.Button(
+            self.header_frame,
+            text="✖",
+            command=self.confirm_quit,
+            fg=PALETTE_TEXT_LIGHT,
+            bg=PALETTE_BASE_BG,
+            activebackground=PALETTE_TEXT_LIGHT,
+            activeforeground=PALETTE_BASE_BG,
+            font=self.room_font,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            padx=int(10 * self.scale),
+            pady=int(2 * self.scale),
+        )
+        self.close_button.pack(side="right", padx=(0, int(30 * self.scale)), pady=int(15 * self.scale))
+
         self.time_label = tk.Label(self.header_frame, text="00:00", fg=PALETTE_TEXT_LIGHT, bg=PALETTE_BASE_BG, font=self.title_font)
-        self.time_label.pack(side="right", padx=int(30 * self.scale), pady=int(15 * self.scale))
+        self.time_label.pack(side="right", padx=(0, int(20 * self.scale)), pady=int(15 * self.scale))
 
         # --- Main Grid Layout Frame ---
         self.grid_container = tk.Frame(root, bg=PALETTE_DASH_BG)
@@ -185,6 +285,21 @@ class MasterDashboardApp:
         self.update_interval_ms = 1000
         self.update()
 
+    @staticmethod
+    def _pick_available_font(preferences, fallback='sans-serif'):
+        try:
+            available = [f.lower() for f in font.families()]
+            for pref in preferences:
+                if pref.lower() in available:
+                    return pref
+        except Exception:
+            pass
+        return fallback
+
+    def confirm_quit(self):
+        if messagebox.askyesno("Close Dashboard", "Are you sure you want to close the program?"):
+            self.root.destroy()
+
     def setup_grid(self):
         num_rooms = len(self.tracks)
         if num_rooms == 0:
@@ -193,6 +308,8 @@ class MasterDashboardApp:
             return
 
         cols = 3 if num_rooms > 4 else 2
+        card_estimated_width = int((self.screen_width - 80) / cols) - 40
+        
         for i in range(cols):
             self.grid_container.grid_columnconfigure(i, weight=1, uniform="equal")
 
@@ -202,30 +319,30 @@ class MasterDashboardApp:
             
             self.grid_container.grid_rowconfigure(r, weight=1, uniform="equal")
 
-            card = tk.Frame(self.grid_container, bg=PALETTE_CARD_BG_IDLE, bd=2, relief="groove")
-            card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
+            card = tk.Frame(self.grid_container, bg=PALETTE_CARD_BG_IDLE, bd=1, relief="solid")
+            card.grid(row=r, column=c, padx=12, pady=12, sticky="nsew")
 
             badge_color = ROOM_BADGE_COLORS.get(room_name.upper(), "#3e3e3f")
             title_banner = tk.Frame(card, bg=badge_color)
             title_banner.pack(fill="x", side="top")
 
-            lbl_room = tk.Label(title_banner, text=room_name.upper(), fg=PALETTE_TEXT_LIGHT, bg=badge_color, font=self.room_font, anchor="w", padx=10)
-            lbl_room.pack(fill="x", pady=4)
+            lbl_room = tk.Label(title_banner, text=room_name.upper(), fg=PALETTE_TEXT_LIGHT, bg=badge_color, font=self.room_font, anchor="w", padx=12)
+            lbl_room.pack(fill="x", pady=8)
 
-            content_frame = tk.Frame(card, bg=PALETTE_CARD_BG_IDLE, padx=10, pady=10)
+            content_frame = tk.Frame(card, bg=PALETTE_CARD_BG_IDLE, padx=15, pady=12)
             content_frame.pack(fill="both", expand=True)
 
-            lbl_now_status = tk.Label(content_frame, text="NOW:", font=self.text_font, fg=PALETTE_TEXT_MUTED, bg=PALETTE_CARD_BG_IDLE, anchor="w")
+            lbl_now_status = tk.Label(content_frame, text="NOW:", font=self.status_font, fg=PALETTE_TEXT_MUTED, bg=PALETTE_CARD_BG_IDLE, anchor="w")
             lbl_now_status.pack(fill="x")
 
-            lbl_now_details = tk.Label(content_frame, text="Empty / Available", font=self.text_font, fg=PALETTE_TEXT_DARK, bg=PALETTE_CARD_BG_IDLE, anchor="w", justify="left")
-            lbl_now_details.pack(fill="x", pady=(0, 10))
+            lbl_now_details = tk.Label(content_frame, text="Empty / Available", font=self.text_font, fg=PALETTE_TEXT_DARK, bg=PALETTE_CARD_BG_IDLE, anchor="nw", justify="left", wraplength=card_estimated_width)
+            lbl_now_details.pack(fill="both", expand=True, pady=(2, 12))
 
-            lbl_next_status = tk.Label(content_frame, text="NEXT:", font=self.text_font, fg=PALETTE_TEXT_MUTED, bg=PALETTE_CARD_BG_IDLE, anchor="w")
+            lbl_next_status = tk.Label(content_frame, text="NEXT:", font=self.status_font, fg=PALETTE_TEXT_MUTED, bg=PALETTE_CARD_BG_IDLE, anchor="w")
             lbl_next_status.pack(fill="x")
 
-            lbl_next_details = tk.Label(content_frame, text="No scheduled events", font=self.text_font, fg=PALETTE_TEXT_DARK, bg=PALETTE_CARD_BG_IDLE, anchor="w", justify="left")
-            lbl_next_details.pack(fill="x")
+            lbl_next_details = tk.Label(content_frame, text="No scheduled events", font=self.text_font, fg=PALETTE_TEXT_DARK, bg=PALETTE_CARD_BG_IDLE, anchor="nw", justify="left", wraplength=card_estimated_width)
+            lbl_next_details.pack(fill="both", expand=True, pady=(2, 4))
 
             self.room_cards[room_name] = {
                 "card": card, "content_frame": content_frame, "now_status": lbl_now_status,
@@ -259,14 +376,14 @@ class MasterDashboardApp:
                 c = state['current']
                 speaker_str = f" ({c['speaker']})" if c['speaker'] else ""
                 now_text = f"{c['title']}{speaker_str}\nEnds: {c['end'].strftime('%H:%M')}"
-                now_status_lbl = " ON STAGE:"
+                now_status_lbl = "ON STAGE:"
                 
             elif state['mode'] == 'pre_start' and state['next_event']:
                 bg_color = PALETTE_CARD_BG_WARN
                 n = state['next_event']
                 speaker_str = f" ({n['speaker']})" if n['speaker'] else ""
-                now_text = f" STARTING SOON\n{n['title']}{speaker_str}"
-                now_status_lbl = " WARNING:"
+                now_text = f"STARTING SOON\n{n['title']}{speaker_str}"
+                now_status_lbl = "WARNING:"
 
             if state['next_event'] and state['mode'] != 'pre_start':
                 n = state['next_event']
@@ -292,31 +409,10 @@ class MasterDashboardApp:
 
 
 def position_on_monitor(window, monitor_index):
-    """Positions the application borderless full screen on a chosen monitor index using native Win32 API calls."""
+    window.withdraw()
     window.update_idletasks()
     
-    monitors = []
-    if sys.platform.startswith("win"):
-        try:
-            import ctypes
-            class RECT(ctypes.Structure):
-                _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
-                            ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
-
-            def callback(hMonitor, hdcMonitor, lprcMonitor, dwData):
-                rect = ctypes.cast(lprcMonitor, ctypes.POINTER(RECT)).contents
-                monitors.append({
-                    "x": int(rect.left), "y": int(rect.top),
-                    "width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top)
-                })
-                return True
-
-            MonitorEnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(RECT), ctypes.c_long)
-            cb_proc = MonitorEnumProc(callback)
-            ctypes.windll.user32.EnumDisplayMonitors(None, None, cb_proc, 0)
-        except Exception:
-            monitors = []
-
+    monitors = get_monitors()
     prim_w = window.winfo_screenwidth()
     prim_h = window.winfo_screenheight()
 
@@ -329,25 +425,28 @@ def position_on_monitor(window, monitor_index):
 
     window.overrideredirect(True)
     window.geometry(f"{w}x{h}+{x}+{y}")
+    window.deiconify()
     return w, h
 
 
 if __name__ == "__main__":
     set_dpi_awareness()
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--monitor', type=int, default=0, help="Target Monitor Index (0=Laptop Screen, 1=External screen)")
-    args = parser.parse_args()
+    # 1. Open layout launcher window first
+    launcher_root = tk.Tk()
+    launcher = MonitorSelectionLauncher(launcher_root)
+    launcher_root.mainloop()
 
-    root = tk.Tk()
-    
-    width, height = position_on_monitor(root, args.monitor)
-    root.focus_force()
-    root.bind("<Escape>", lambda e: root.destroy())
-    
-    app = MasterDashboardApp(root, schedule_file=SCHEDULE_FILE, width=width, height=height)
-    
-    try:
-        root.mainloop()
-    except KeyboardInterrupt:
-        pass
+    # 2. Only launch main app if a selection was confirmed
+    if launcher.confirmed:
+        root = tk.Tk()
+        width, height = position_on_monitor(root, launcher.chosen_monitor)
+        root.focus_force()
+        
+        app = MasterDashboardApp(root, schedule_file=SCHEDULE_FILE, width=width, height=height)
+        root.bind("<Escape>", lambda e: app.confirm_quit())
+        
+        try:
+            root.mainloop()
+        except KeyboardInterrupt:
+            pass
