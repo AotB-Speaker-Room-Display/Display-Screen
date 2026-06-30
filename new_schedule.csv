@@ -1,0 +1,67 @@
+Track,Date,Start Time,Duration,Speaker,Talk Title,Synopsis,Type,Room
+Lawn,02/07/2026,07:30:00,90,,Breakfast,,,LAWN
+Studio A,02/07/2026,09:00:00,10,,Dydh da - welcome to day 1,,,
+Studio A,02/07/2026,09:10:00,60,Birgitta Boeckeler,State of Play: AI Coding Assistants,,,Engineering
+Studio A,02/07/2026,10:10:00,30,Paul Massey,AI native business - ask me anything,,,Organisations
+Lawn,02/07/2026,10:40:00,20,,Break,,,
+Studio L,02/07/2026,11:00:00,45,Cat Morris,From panic to peace: Making the observability of an eventually consistent system suck less,,,Engineering
+Studio E,02/07/2026,11:00:00,105,Munish Malik,The great prototyping quest,,,Workshops
+Studio A,02/07/2026,11:00:00,45,Ryan Healey,The developers worked in two by two. Hurrah! Hurrah!,,,Teams
+Studio F,02/07/2026,11:00:00,105,Rucha Kapare,10 facilitation hacks and 0 slides in 100 minutes,,,Workshops
+Studio C,02/07/2026,11:00:00,45,Julia Petretta,Why modern cross-functional product teams create more friction than alignment,,,Design & Product
+Studio K,02/07/2026,11:00:00,45,Joakim Sundén,""The smoothest reorg I've ever seen"": Lessons in collaborative org design",,,Organisations
+Lawn,02/07/2026,11:45:00,15,,Break,,,
+Studio K,02/07/2026,12:00:00,45,Robin Olsson,The successful failure: How our perfect AI tool drowned on the shore of adoption,,,Organisations
+Studio L,02/07/2026,12:00:00,45,Chris Rutter,A 10-Year Quest for DevSecOps: What The Legend of Zelda Taught Me About Security,,,Engineering
+Studio A,02/07/2026,12:00:00,45,Vardhan Bhatt,The resilient consultant: From a dream team to burnout and back,,,Teams
+Studio C,02/07/2026,12:00:00,45,Rachel Dubois,"Built it, shipped it, ... and nobody used it",,,Design & Product
+Lawn,02/07/2026,12:45:00,60,,Lunch,,,
+Studio A,02/07/2026,01:45:00,15,,Grey Matter talk,,,
+Studio L,02/07/2026,14:00:00,45,Thierry de Pauw,A case study in non-blocking continuous code reviews,,,Engineering
+Studio K,02/07/2026,14:00:00,45,Qiushuang Wang,The paradox of perfect process: How we delivered global product flawlessly... and missed the mark,,,Organisations
+Studio A,02/07/2026,14:00:00,45,Ronja Bromander,From bias to brilliance,,,Teams
+Studio F,02/07/2026,14:00:00,105,Lyssa-Fêe Crump,Accessibility escape room: Agile thinking to break the locks,,,Workshops
+Studio E,02/07/2026,14:00:00,105,Amy Aspinall,The Traitors: Agile edition,,,Workshops
+Studio C,02/07/2026,14:00:00,45,Francesca Salvati,From project factory to product thinking: A platform team’s journey,,,Design & Product
+Lawn,02/07/2026,02:45:00,15,,Break,,,
+Studio C,02/07/2026,15:00:00,45,Paul Anumudu,"Pivot, Fuse, Thrive: Transforming ITSM with Agile product leadership and Everyday AI",,,Design & Product
+Studio A,02/07/2026,15:00:00,45,Andy Weir,"Your ticket isn't the truth, the conversation is",,,Teams
+Studio K,02/07/2026,15:00:00,45,Ceri Newton-Sargunar,It's all just as bad as you think it is: a message of hope in turbulent times,,,Organisations
+Studio L,02/07/2026,15:00:00,45,Gerald Benischke,A love letter to legacy,,,Engineering
+Lawn,02/07/2026,03:45:00,15,,Break,,,
+Studio C,02/07/2026,16:00:00,45,Annegret Junker,AI Can't Turn the Tanker (Your Team Has To),,,Design & Product
+Studio L,02/07/2026,16:00:00,45,Lee Provoost,Keeping engineers sane when everything's on fire: a fintech replatforming tale,,,Engineering
+Studio K,02/07/2026,16:00:00,45,Ruth Waterfield,No managers: Complete chaos or enhanced agility?,,,Organisations
+Studio A,02/07/2026,16:00:00,45,Gitte Klitgaard,How I helped developers talk about feelings and needs,,,Teams
+Lawn,02/07/2026,04:45:00,15,,Break,,,
+Studio A,02/07/2026,05:00:00,10,,Zoho lightning talk,,,
+Studio A,02/07/2026,05:15:00,30,,Community lightning talks,,,
+Gylly Beach,03/07/2026,18:45:00,255,,Beach party,,,
+Lawn,03/07/2026,07:30:00,90,,Breakfast,,,
+Studio A,03/07/2026,09:00:00,10,,Dydh da - welcome to day 2,,,
+Studio A,03/07/2026,09:10:00,60,Francesca Cortesi,AI is here - how will it impact product management?,,,Design & Product
+Studio A,03/07/2026,10:10:00,30,Olly Brand,AI native engineering - ask me anything,,,Engineering
+Lawn,03/07/2026,10:40:00,20,,Break,,,
+Studio K,03/07/2026,11:00:00,45,Alisson Fernandes,Purpose-driven leadership: Unleashing the power of belonging,,,Organisations
+Studio E,03/07/2026,11:00:00,100,Gemma Honour,Break the pattern: Creative thinking for product people!,,,Workshops
+Studio A,03/07/2026,11:00:00,45,Ben Collins,What happens when you change teams every two days?,,,Teams
+Studio F,03/07/2026,11:00:00,100,Maxime Bonnin,Shakespeare on Stage… Shakespeare in your next sprints?,,,Workshops
+Studio L,03/07/2026,11:00:00,45,Dan Abel,Being secure by design: engineer led security,,,Engineering
+Studio C,03/07/2026,11:00:00,45,Rachel Dubois,"Everything I learned about Product, I learned by messing It up first",,,Design & Product
+Lawn,03/07/2026,11:45:00,10,,Break,,,
+Studio L,03/07/2026,11:55:00,45,Connell Sharp,Experimentation at Stack Overflow: How we built our new comments UI,,,Engineering
+Studio K,03/07/2026,11:55:00,45,Jaime San Martin,How AI reporting at Mews predicted incidents and saved $150K in 3 Months,,,Organisations
+Studio A,03/07/2026,11:55:00,45,Emily King,When dependency hell came for us: A small team's Agile security journey,,,Teams
+Studio C,03/07/2026,11:55:00,45,Joakim Sundén,How autonomy saved one of Spotify’s most loved features,,,Design & Product
+Lawn,03/07/2026,12:45:00,55,,Lunch,,,
+Studio A,03/07/2026,13:35:00,45,Keith Klain,When the whistle blows: An ethics experience report,,,Teams
+Studio K,03/07/2026,13:35:00,45,Karl Royle,The invisible work of coaching: Lessons from two years on the edge of organisational change,,,Organisations
+Studio L,03/07/2026,13:35:00,45,Kate Sant,Never let a crisis go to waste : how we used GenAI to battle a SPAM attack,,,Engineering
+Studio C,03/07/2026,13:35:00,45,Julia Petretta,From Pixel Pushing to Product Purpose,,,Design & Product
+Lawn,03/07/2026,14:20:00,10,,Break,,,
+Studio L,03/07/2026,14:30:00,45,Tom Morton,From on-prem to cloud to … chaos? Our quest for developer experience,,,Engineering
+Studio C,03/07/2026,14:30:00,45,Valentina Caruso,The 7 mountains of legacy-to-web migration and how to climb them,,,Design & Product
+Studio K,03/07/2026,14:30:00,45,Jo Tansley Thomas,"Institutional memory: beyond people, buildings and the fear of losing it",,,Organisations
+Studio A,03/07/2026,14:30:00,45,Dinesh Sharma,Restoring sprint goal confidence: How AI turned hope Into evidence,,,Teams
+Studio A,03/07/2026,15:20:00,60,Veerle Verhagen,Veerle doesn't want to talk about AI,,,Teams
+Studio A,03/07/2026,16:20:00,10,,Meur ras - thank you,,,

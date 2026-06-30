@@ -10,7 +10,7 @@ from ctypes import windll
 # CONFIGURATION & TESTING CONTROLS
 # ==============================================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SCHEDULE_FILE = os.path.join(SCRIPT_DIR, 'schedule.csv')
+SCHEDULE_FILE = os.path.join(SCRIPT_DIR, 'new_schedule.csv')
 
 BOTTOM_TEXT = "*This Timetable Software was Developed by Dylan Hankers for a Tech Cornwall T-Level Placement Project."
 
@@ -104,7 +104,7 @@ def parse_date_flexible(date_str: str) -> datetime.date | None:
 def load_schedule(filename: str, track_name: str | None = None):
     schedule: list[dict] = []
     try:
-        with open(filename, mode='r', newline='', encoding='utf-8-sig') as file:
+        with open(filename, mode='r', newline='', encoding='cp1252') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 clean_row = {}
@@ -139,17 +139,15 @@ def load_schedule(filename: str, track_name: str | None = None):
                 if '-' in time_str:
                     time_str = time_str.split('-')[0].strip()
 
-                try:
-                    start_time_obj = datetime.datetime.strptime(time_str, '%H:%M').time()
-                except ValueError:
+                for fmt in ('%H:%M:%S', '%H:%M', '%I:%M%p', '%I:%M %p'):
                     try:
-                        start_time_obj = datetime.datetime.strptime(time_str, '%I:%M%p').time()
+                        start_time_obj = datetime.datetime.strptime(time_str, fmt).time()
+                        break
                     except ValueError:
-                        try:
-                            start_time_obj = datetime.datetime.strptime(time_str, '%I:%M %p').time()
-                        except ValueError:
-                            print(f"WARNING: Skipping row due to invalid Start Time format ('{clean_row.get('Start Time')}').")
-                            continue
+                        continue
+                else:
+                    print(f"WARNING: Skipping row due to invalid Start Time format ('{time_str}').")
+                    continue
 
                 start_datetime = datetime.datetime.combine(date_obj, start_time_obj)
 
